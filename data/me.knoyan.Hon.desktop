@@ -1,0 +1,9 @@
+# data/me.knoyan.Hon.desktop
+[Desktop Entry]
+Name=Hon
+Comment=Book reader manager
+Exec=hon
+Icon=me.knoyan.Hon
+Terminal=false
+Type=Application
+Categories=Office;Reader;
