@@ -120,7 +120,7 @@ class PathFolderPage(Page):
             version="0.1.0",
             developers=["Knoyan"],
         )
-        about.set_website("https://github.com/kha-white/manga-ocr")
+        about.set_website("https://github.com/KnoyanMitsu/Hon")
         about.add_credit_section(
             "Credits",
             [
