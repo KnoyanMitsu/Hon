@@ -21,6 +21,13 @@ For OCR i made 3 option:
 - Selection OCR (Recommended)
 
 Why not recommended? I still find Good OCR Automation (for position) still not found but for now i using EasyOCR for auto location X/Y? Horizontal Japan still work but Vertical is not working so that why. I recommend use Selection OCR
+and is work on Linux Mobile? i dont know cause i disable it 
+
+for OCR install this first
+
+```
+pip install manga-ocr easyocr
+```
 
 ## What best path folder?
 
