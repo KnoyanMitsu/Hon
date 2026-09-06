@@ -50,6 +50,6 @@ Here my To-DO
 - [X] OCR
 - [ ] Find a good library OCR
 - [x] Favorite Page Chapter
-- [ ] History
-- [ ] Favorite Book
+- [X] History
+- [X] Favorite Book
 
