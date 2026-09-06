@@ -7,7 +7,7 @@ from gi.repository import Adw, Gtk, GLib
 from pages.page import Page
 from core.api import LibraryAPI
 from core.images import load_thumbnail
-from pages.readerpage import ReaderPage
+from pages.reader.readerpage import ReaderPage
 
 
 class HistoryPage(Page):
