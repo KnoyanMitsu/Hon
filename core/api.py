@@ -1,16 +1,15 @@
 import json
 from .scanner import scan_library
 from .database import LibraryDB
-from core.paths import get_db_path
 from .connection import Connection
 from .reader import list_pages, read_page, read_pages
 from .ocr import decode, encode, empty_document
-from .manga_ocr import recognize, recognize_all
 from .manga_ocr import recognize, recognize_all, recognize_crop
 from .deepl import is_available as deepl_available, translate_document
 
+
 class LibraryAPI:
-    """Ini yang dipanggil dari GTK — semua fungsi return dict/list JSON-ready."""
+    """API Layer yang dipanggil dari GTK/Frontend — semua fungsi return dict/list JSON-ready."""
 
     def __init__(self):
         self.db = LibraryDB()
@@ -20,8 +19,11 @@ class LibraryAPI:
 
     def get_library(self):
         if self.is_first_run():
-            return {"books": []}   # <-- skip, langsung balikin kosong tanpa query
+            return {"books": []}
         return {"books": self.db.get_all_books()}
+
+    def get_library_json(self):
+        return json.dumps(self.get_library(), indent=2, ensure_ascii=False)
 
     def scan_and_import(self, root_path: str):
         books = scan_library(root_path)
@@ -34,14 +36,11 @@ class LibraryAPI:
             if book.get("cover_path"):
                 self.db.update_cover_path(book["folder_path"], book["cover_path"])
 
-    def get_library(self):
-        return {"books": self.db.get_all_books()}
-
-    def get_library_json(self):
-        return json.dumps(self.get_library(), indent=2, ensure_ascii=False)
-
     def get_book(self, book_id: int):
         return self.db.get_book(book_id)
+
+    def get_book_json(self, book_id: int):
+        return json.dumps(self.get_book(book_id), indent=2, ensure_ascii=False)
 
     def get_chapter_pages(self, chapter_id: int):
         chapter = self.db.get_chapter(chapter_id)
@@ -69,15 +68,85 @@ class LibraryAPI:
             return None
         return {"chapter": chapter, **read_page(chapter["file_path"], page_number)}
 
-    def get_ocr_document(self, chapter_id: int):
-        stored = self.db.get_ocr_document(chapter_id)
-        return decode(stored) if stored else None
+    # --- Favorite Page API ---
 
     def get_favorite_pages(self, chapter_id: int):
         return self.db.get_favorite_pages(chapter_id)
 
     def toggle_favorite_page(self, chapter_id: int, page_number: int):
         return self.db.toggle_favorite_page(chapter_id, page_number)
+
+    # --- Favorite Book API ---
+
+    def toggle_favorite_book(self, book_id: int):
+        """Toggle status favorit buku (Tambah ke favorit / Hapus dari favorit)."""
+        return self.db.toggle_favorite_book(book_id)
+
+    def is_book_favorite(self, book_id: int) -> bool:
+        """Cek apakah buku ada di daftar favorit."""
+        return self.db.is_book_favorite(book_id)
+
+    # Alias agar fleksibel dipanggil is_favorite_book atau is_book_favorite
+    is_favorite_book = is_book_favorite
+
+    def set_favorite_book(self, book_id: int, is_favorite: bool):
+        """Set status favorit buku secara eksplisit."""
+        return self.db.set_favorite_book(book_id, is_favorite)
+
+    def get_favorite_books(self):
+        """Ambil semua daftar buku favorit."""
+        return {"books": self.db.get_favorite_books()}
+
+    def get_favorite_books_json(self):
+        """Ambil semua daftar buku favorit dalam format JSON string."""
+        return json.dumps(self.get_favorite_books(), indent=2, ensure_ascii=False)
+
+    # --- Reading History API ---
+
+    def record_history(self, chapter_id: int, page_number: int = 1, book_id: int = None):
+        """
+        Catat / update riwayat baca saat user mengeklik chapter atau membaca halaman.
+        Secara otomatis mengambil book_id dari chapter jika tidak diberikan.
+        """
+        return self.db.record_history(chapter_id=chapter_id, page_number=page_number, book_id=book_id)
+
+    def record_history_json(self, chapter_id: int, page_number: int = 1, book_id: int = None):
+        """Catat riwayat baca dan kembalikan response dalam format JSON string."""
+        return json.dumps(
+            self.record_history(chapter_id=chapter_id, page_number=page_number, book_id=book_id),
+            indent=2,
+            ensure_ascii=False,
+        )
+
+    def get_history(self, limit: int = 50, offset: int = 0):
+        """Ambil list riwayat baca buku terbaru (Read History)."""
+        return {"history": self.db.get_history(limit=limit, offset=offset)}
+
+    def get_history_json(self, limit: int = 50, offset: int = 0):
+        """Ambil list riwayat baca dalam format JSON string."""
+        return json.dumps(self.get_history(limit=limit, offset=offset), indent=2, ensure_ascii=False)
+
+    def get_book_history(self, book_id: int):
+        """Ambil riwayat baca terakhir untuk 1 buku tertentu (misal untuk tombol Resume Reading)."""
+        return self.db.get_book_history(book_id)
+
+    def get_book_history_json(self, book_id: int):
+        """Ambil riwayat baca 1 buku dalam format JSON string."""
+        return json.dumps(self.get_book_history(book_id), indent=2, ensure_ascii=False)
+
+    def delete_history(self, book_id: int):
+        """Hapus riwayat baca untuk 1 buku."""
+        return self.db.delete_history_item(book_id)
+
+    def clear_history(self):
+        """Hapus semua riwayat baca."""
+        return self.db.clear_history()
+
+    # --- OCR API ---
+
+    def get_ocr_document(self, chapter_id: int):
+        stored = self.db.get_ocr_document(chapter_id)
+        return decode(stored) if stored else None
 
     def export_ocr(self, chapter_id: int):
         chapter = self.db.get_chapter(chapter_id)
@@ -118,7 +187,6 @@ class LibraryAPI:
             "original": text,
             "translated": "",
         }]
-        # Translation sementara dinonaktifkan agar API DeepL tidak terpakai.
         self.db.save_ocr_document(chapter_id, encode(document))
         return text
 
@@ -160,7 +228,6 @@ class LibraryAPI:
         pages = recognize_all(page_paths)
         document = empty_document(chapter, len(pages))
         document["pages"] = pages
-        # Translation sementara dinonaktifkan agar API DeepL tidak terpakai.
         self.db.save_ocr_document(chapter_id, encode(document))
         return document
 
@@ -178,7 +245,6 @@ class LibraryAPI:
         return {"document": document, "translated": translated_count}
 
     def clear_ocr_page(self, chapter_id: int, page_number: int):
-        """Hapus semua blocks OCR di 1 halaman tertentu, halaman lain gak kesentuh."""
         stored = self.db.get_ocr_document(chapter_id)
         if not stored:
             return None
@@ -192,9 +258,7 @@ class LibraryAPI:
         self.db.save_ocr_document(chapter_id, encode(document))
         return document
 
-
     def clear_ocr_document(self, chapter_id: int):
-        """Reset blocks OCR di SEMUA halaman jadi kosong (dokumen tetap ada, cuma bersih)."""
         stored = self.db.get_ocr_document(chapter_id)
         if not stored:
             return None
@@ -209,15 +273,13 @@ class LibraryAPI:
     def delete_ocr_document(self, chapter_id: int):
         return self.db.delete_ocr_document(chapter_id)
 
-    def delete_ocr_document(self, chapter_id: int):
-        """Hapus dokumen OCR sepenuhnya dari database (bukan cuma blocks-nya)."""
-        return self.db.delete_ocr_document(chapter_id)
+    # --- Unsorted Chapters & Folders API ---
 
     def get_unsorted(self):
         return self.db.get_unsorted_chapters()
 
     def set_chapter_number(self, chapter_id: int, number: float):
-        return self.db.set_chapter_number(chapter_id, number)
+        return self.db.update_chapter_number(chapter_id, number)
 
     def add_folder(self, path: str, label: str = None):
         return self.db.add_folder(path, label)
@@ -236,8 +298,8 @@ class LibraryAPI:
 
         for folder in folders:
             try:
-                books = scan_library(folder["path"])       # scan 1 path
-                result = self.db.save_books(books)          # simpan hasilnya
+                books = scan_library(folder["path"])
+                result = self.db.save_books(books)
                 self._update_covers(books)
                 total_imported += result["imported"]
                 total_skipped += result["skipped"]
@@ -250,9 +312,6 @@ class LibraryAPI:
             "skipped": total_skipped,
             "errors": errors,
         }
-
-    def get_library(self):
-        return {"books": self.db.get_all_books()}
 
     def close(self):
         self.db.close()

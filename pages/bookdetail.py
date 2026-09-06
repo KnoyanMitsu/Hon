@@ -5,6 +5,7 @@ from pages.page import Page
 from pages.readerpage import ReaderPage
 from core.images import load_thumbnail
 import os
+from core.api import LibraryAPI
 
 
 class BookDetailPage(Page):
@@ -12,7 +13,10 @@ class BookDetailPage(Page):
         super().__init__(book["title"], **kwargs)
         self.book = book
 
+        self.api = LibraryAPI()
         print("id buku:", book["chapters"])
+
+        self.is_favorite = self.api.is_book_favorite(book["id"])
 
         toolbar_view = Adw.ToolbarView()
 
@@ -20,6 +24,13 @@ class BookDetailPage(Page):
         # title otomatis ngambil dari NavigationPage title kalau gak di-set manual,
         # tapi bisa custom juga kalau perlu:
         # header.set_title_widget(Adw.WindowTitle(title=book["title"]))
+        if self.is_favorite:
+            self.favorite_button = Gtk.Button(icon_name="starred-symbolic")
+        else:
+            self.favorite_button = Gtk.Button(icon_name="non-starred-symbolic")
+        self.favorite_button.set_tooltip_text("Favorite Book")
+        self.favorite_button.connect("clicked", self.on_favorite_clicked)
+        header.pack_end(self.favorite_button)
         toolbar_view.add_top_bar(header)
 
 
@@ -48,7 +59,13 @@ class BookDetailPage(Page):
 
         self.set_content(toolbar_view)
 
+    def on_favorite_clicked(self, button):
+        res = self.api.toggle_favorite_book(self.book["id"])
+        is_fav = res["is_favorite"]
+        button.set_icon_name("starred-symbolic" if is_fav else "non-starred-symbolic")
+
     def onclick_chapter(self, row, chapter):
+        print(f"Navigasi ke chapter: {chapter['chapter_title']} (ID: {chapter['id']})")
         # Navigasi ke halaman detail chapter
         reader_page = ReaderPage(chapter)
         nav_page = Adw.NavigationPage(child=reader_page, title=chapter["chapter_title"])

@@ -13,7 +13,7 @@ from core.deepl import is_available as deepl_available
 
 
 class ReaderPage(Page):
-    def __init__(self, chapter, **kwargs):
+    def __init__(self, chapter, initial_page=None, **kwargs):
         super().__init__("Reader", **kwargs)
 
         self.chapter = chapter
@@ -28,7 +28,19 @@ class ReaderPage(Page):
         self.loaded_pages = set()
         self.loading_pages = set()
         self.worker_limit = threading.BoundedSemaphore(2)
-        self.current_page = 0
+
+        if initial_page is None:
+            book_id = chapter.get("book_id")
+            if book_id:
+                history = self.reader_api.get_book_history(book_id)
+                if history and history.get("chapter_id") == chapter["id"]:
+                    initial_page = history.get("last_page", 1)
+                else:
+                    initial_page = 1
+            else:
+                initial_page = 1
+
+        self.current_page = max(0, min(initial_page - 1, len(self.page_data) - 1)) if self.page_data else 0
         self.favorite_pages = set(self.reader_api.get_favorite_pages(chapter["id"]))
         self.page_containers = []
         self.ocr_document = self.reader_api.get_ocr_document(chapter["id"])
@@ -137,8 +149,14 @@ class ReaderPage(Page):
             self.carousel.append(container)
 
         self.carousel.connect("notify::position", self.on_page_changed)
-        self.load_nearby_pages(0)
+        if self.page_data and self.current_page > 0:
+            target = self.carousel.get_nth_page(self.current_page)
+            if target:
+                self.carousel.scroll_to(target, False)
+
+        self.load_nearby_pages(self.current_page)
         self.update_favorite_button()
+        self.reader_api.record_history(self.chapter["id"], self.current_page + 1)
 
         toolbar_view.set_content(self.reader_overlay)
 
@@ -149,7 +167,7 @@ class ReaderPage(Page):
         indicator.set_margin_start(12)
         indicator.set_margin_end(12)
 
-        self.page_label = Gtk.Label(label=self.page_text(1))
+        self.page_label = Gtk.Label(label=self.page_text(self.current_page + 1))
         self.page_label.set_width_chars(len(self.page_text(len(self.page_data))))
         indicator.append(self.page_label)
 
@@ -159,6 +177,7 @@ class ReaderPage(Page):
             max(0, len(self.page_data) - 1),
             1,
         )
+        self.page_scale.set_value(self.current_page)
         self.page_scale.set_draw_value(False)
         self.page_scale.set_hexpand(True)
         self.page_scale.set_sensitive(bool(self.page_data))
@@ -568,7 +587,9 @@ class ReaderPage(Page):
 
     def on_page_changed(self, carousel, param_spec):
         page_number = round(carousel.get_position())
-        self.current_page = page_number
+        if page_number != self.current_page:
+            self.current_page = page_number
+            self.reader_api.record_history(self.chapter["id"], page_number + 1)
         self.debug_log(
             "position=%s page=%s loaded=%s loading=%s"
             % (carousel.get_position(), page_number + 1, sorted(self.loaded_pages), sorted(self.loading_pages))

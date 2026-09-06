@@ -13,7 +13,7 @@ class MyApplication(Adw.Application):
 
     def __init__(self):
         """Menginisialisasi aplikasi dengan ID aplikasi yang unik."""
-        super().__init__(application_id="com.example.MyGtkApplication")
+        super().__init__(application_id="my.Knoyan.Hon")
 
 
     def do_activate(self):

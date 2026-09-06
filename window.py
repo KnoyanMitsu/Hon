@@ -3,6 +3,8 @@ import gi
 from gi.repository import Adw, Gtk
 from pages.home import HomePage
 from pages.path_folder import PathFolderPage
+from pages.favorite import FavoritePage
+from pages.history import HistoryPage
 
 
 class Window(Adw.ApplicationWindow):
@@ -48,10 +50,23 @@ class Window(Adw.ApplicationWindow):
         # 7. Daftarkan halaman Anda
         home_page = HomePage()
         pref_page = PathFolderPage()
-        header.pack_end(home_page.refresh_button)
+        fav_page = FavoritePage()
+        history_page = HistoryPage()
+
+        self.home_page = home_page
+        self.fav_page = fav_page
+        self.history_page = history_page
+
+        fav_page.refresh_button.set_visible(False)
+
         self.page(home_page, "home", "Home", "go-home-symbolic")
+        self.page(fav_page, "favorite", "Favorite", "starred-symbolic")
+        self.page(history_page, "history", "History", "document-open-recent-symbolic")
         self.page(pref_page, "setting", "Settings", "preferences-system-symbolic")
-        self.stack.connect("notify::visible-child", self.on_visible_child_changed, home_page.refresh_button, home_page)
+        self.stack.connect("notify::visible-child", self.on_visible_child_changed)
+        header.pack_end(home_page.refresh_button)
+        header.pack_end(fav_page.refresh_button)
+
         self.stack.set_visible_child_name("home")
 
         # --- BARU: bungkus toolbar (tab Home/Settings) sebagai root NavigationView ---
@@ -67,5 +82,12 @@ class Window(Adw.ApplicationWindow):
         page = self.stack.get_page(content)
         page.set_icon_name(icon_name=icon_name)
 
-    def on_visible_child_changed(self, stack, param_spec, refresh_button, home_page):
-        refresh_button.set_visible(stack.get_visible_child() is home_page)
+    def on_visible_child_changed(self, stack, param_spec):
+        child = stack.get_visible_child()
+        self.home_page.refresh_button.set_visible(child is self.home_page)
+        self.fav_page.refresh_button.set_visible(child is self.fav_page)
+
+        if child is self.fav_page:
+            self.fav_page.reload_favorites()
+        elif child is self.history_page:
+            self.history_page.load_history()
