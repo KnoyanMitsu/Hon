@@ -52,6 +52,7 @@ class Window(Adw.ApplicationWindow):
         pref_page = PathFolderPage()
         fav_page = FavoritePage()
         history_page = HistoryPage()
+        # book_detail_page = BookDetailPage()
 
         self.home_page = home_page
         self.fav_page = fav_page
@@ -73,6 +74,8 @@ class Window(Adw.ApplicationWindow):
         self.nav_view = Adw.NavigationView()
 
         root_page = Adw.NavigationPage(child=toolbar, title="Hon")
+        root_page.connect("shown", lambda page: self.fav_page.refresh())
+        root_page.connect("shown", lambda page: self.history_page.refresh())
         self.nav_view.push(root_page)
 
         self.set_content(self.nav_view)   # ganti dari self.set_content(toolbar)

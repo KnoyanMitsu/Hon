@@ -34,6 +34,9 @@ class FavoritePage(Page):
         thread = threading.Thread(target=self.load_library_in_background, daemon=True)
         thread.start()
 
+    def refresh(self):
+        self.reload_favorites()
+        
     def on_refresh_clicked(self, button):
         self.reload_favorites()    
 

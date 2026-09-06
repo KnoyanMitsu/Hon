@@ -204,6 +204,7 @@ class HomePage(Page):
         # Navigasi ke halaman detail buku
         book_detail_page = BookDetailPage(book)
         nav_page = Adw.NavigationPage(child=book_detail_page, title=book["title"])
+        nav_page.connect("shown", lambda page: book_detail_page.refresh()) 
         self.get_root().nav_view.push(nav_page)
 
     def create_book_card(self, title, subtitle, image, book):

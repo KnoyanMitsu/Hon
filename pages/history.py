@@ -14,12 +14,7 @@ class HistoryPage(Page):
     def __init__(self, **kwargs):
         super().__init__("History", **kwargs)
         self.api = LibraryAPI()
-        self.connect("notify::mapped", self.on_mapped)
         self.load_history()
-
-    def on_mapped(self, widget, param_spec):
-        if self.get_mapped():
-            self.load_history()
 
     def show_empty_state(self):
         status = Adw.StatusPage(
@@ -82,6 +77,11 @@ class HistoryPage(Page):
 
         self.set_content(scrolled)
 
+
+    def refresh(self):
+        """Dipanggil tiap kali halaman ini kelihatan lagi (termasuk pas balik dari Reader)."""
+        self.load_history()
+    
     def on_click_history(self, row, item):
         # Ambil data chapter dari ID
         chapter = self.api.db.get_chapter(item["chapter_id"])

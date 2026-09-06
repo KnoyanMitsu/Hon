@@ -75,9 +75,12 @@ class BookDetailPage(Page):
         button.set_icon_name("starred-symbolic" if is_fav else "non-starred-symbolic")
 
     def onclick_chapter(self, row, chapter):
+        # print(self.history.get("last_page"))
         if self.history and self.history.get("chapter_id") == chapter["id"]:
-            reader_page = ReaderPage(chapter, initial_page=self.history.get("last_page", 1))
+            print("last seen")
+            reader_page = ReaderPage(chapter, initial_page=self.history.get("last_page"))
         else:
+            print("new chapter")
             reader_page = ReaderPage(chapter)
 
         nav_page = Adw.NavigationPage(child=reader_page, title=chapter["chapter_title"])

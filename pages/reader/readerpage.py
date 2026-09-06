@@ -13,6 +13,8 @@ from core.manga_ocr import is_available
 from core.deepl import is_available as deepl_available
 
 
+
+
 class ReaderPage(Page, ReaderPageOCRMixin):
     """Main comic/manga reader page handling Carousel layout, image loading, favorites, and history tracking."""
 
@@ -37,12 +39,16 @@ class ReaderPage(Page, ReaderPageOCRMixin):
             if book_id:
                 history = self.reader_api.get_book_history(book_id)
                 if history and history.get("chapter_id") == chapter["id"]:
-                    initial_page = history.get("last_page", 1)
+                    print("last seen")
+                    initial_page = history.get("last_page")
                 else:
+                    print("new chapter")
                     initial_page = 1
             else:
+                print("new chapter but error")
                 initial_page = 1
 
+        print(initial_page)
         self.current_page = max(0, min(initial_page - 1, len(self.page_data) - 1)) if self.page_data else 0
         self.favorite_pages = set(self.reader_api.get_favorite_pages(chapter["id"]))
         self.page_containers = []
@@ -192,6 +198,7 @@ class ReaderPage(Page, ReaderPageOCRMixin):
         self.connect("notify::width", self.on_width_changed)
         GLib.idle_add(self.render_ocr_overlays)
         GLib.idle_add(self.update_ocr_action)
+
 
     def on_page_changed(self, carousel, param_spec):
         page_number = round(carousel.get_position())
