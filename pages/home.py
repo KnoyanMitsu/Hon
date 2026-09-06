@@ -37,8 +37,8 @@ class HomePage(Page):
     def show_empty_state(self):
         status = Adw.StatusPage(
             icon_name="folder-symbolic",
-            title="Belum ada buku",
-            description="Tambahkan folder lewat halaman Path Folder, lalu klik Scan Library.",
+            title="No one Books in this library",
+            description="Add your book path in the settings page to see your book here.",
         )
         self.set_content(status)
 

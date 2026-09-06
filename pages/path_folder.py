@@ -86,12 +86,38 @@ class PathFolderPage(Page):
         row = Adw.ActionRow(title=title)
         row.set_subtitle(subtitle)
         row.set_icon_name("folder-symbolic")
+        delete_button = Gtk.Button(icon_name="user-trash-symbolic")
+        delete_button.add_css_class("flat")
+        delete_button.set_tooltip_text("Delete this path")
+        # Kirim pasangan (row, subtitle) ke callback
+        delete_button.connect("clicked", self.on_delete_clicked, row, subtitle)
+        row.add_suffix(delete_button)
         self.group.add(row)
 
     def on_add_clicked(self, button):
         dialog = Gtk.FileDialog()
         dialog.set_title("Where your directory book")
         dialog.select_folder(self.get_root(), None, self.on_folder_selected)
+
+    def on_delete_clicked(self, button, row, path):
+        alert = Adw.AlertDialog(
+            heading="Delete Path",
+            body=f"Are you sure you want to delete this path?\n{path}",
+        )
+        alert.add_response("cancel", "Cancel")
+        alert.add_response("delete", "Delete")
+        alert.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
+        alert.choose(self.get_root(), None, self.on_delete_confirmed, row, path)
+
+        
+    def on_delete_confirmed(self, alert, response, row, path):
+        if response == "delete":
+            try:
+                self.api.remove_folder_by_path(path)    # Hapus dari DB
+                self.group.remove(row)    
+                print("Deleted path:", path)
+            except Exception as e:
+                print("Gagal delete path:", e)
 
     def on_folder_selected(self, dialog, result):
         try:

@@ -40,8 +40,8 @@ class FavoritePage(Page):
     def show_empty_state(self):
         status = Adw.StatusPage(
             icon_name="starred-symbolic",
-            title="Belum Ada Buku Favorit",
-            description="Tandai buku sebagai favorit di halaman detail buku agar muncul di sini.",
+            title="No Favorite Books",
+            description="You not have any favorite books yet. Add some books to your favorites to see them here.",
         )
         self.set_content(status)
 

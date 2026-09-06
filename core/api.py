@@ -290,6 +290,15 @@ class LibraryAPI:
     def remove_folder(self, folder_id: int):
         return self.db.remove_folder(folder_id)
 
+    def remove_folder_json(self, folder_id: int):
+        return json.dumps(self.remove_folder(folder_id), indent=2, ensure_ascii=False)
+
+    def remove_folder_by_path(self, path: str):
+        return self.db.remove_folder_by_path(path)
+
+    def remove_folder_by_path_json(self, path: str):
+        return json.dumps(self.remove_folder_by_path(path), indent=2, ensure_ascii=False)
+
     def scan_all(self):
         folders = self.db.get_folders()
         total_imported = 0

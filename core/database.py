@@ -492,6 +492,13 @@ class LibraryDB:
             self.conn.commit()
             return {"removed": cur.rowcount > 0}
 
+    def remove_folder_by_path(self, path: str):
+        with self.lock:
+            cur = self.conn.cursor()
+            cur.execute("DELETE FROM library_paths WHERE path = ?", (path,))
+            self.conn.commit()
+            return {"removed": cur.rowcount > 0}
+
     def close(self):
         with self.lock:
             self.conn.close()
