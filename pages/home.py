@@ -9,6 +9,7 @@ from core.api import LibraryAPI
 from pages.bookdetail import BookDetailPage
 
 from core.paths import get_db_path
+from core.debug import debug_print
 from core.images import load_thumbnail
 import threading
 class HomePage(Page):
@@ -45,6 +46,14 @@ class HomePage(Page):
     def load_library_in_background(self):
         library = self.api.get_library()   # jalan di thread lain
         GLib.idle_add(self.on_library_loaded, library)
+
+    def reload(self):
+        """Reload ringan tanpa scan filesystem — hanya query DB."""
+        threading.Thread(target=self.load_library_in_background, daemon=True).start()
+
+    def refresh(self):
+        """Alias untuk auto-refresh dari Window."""
+        self.reload()
 
     def on_library_loaded(self, library):
         books = library["books"]
@@ -179,12 +188,13 @@ class HomePage(Page):
             self.debug_log("user drag resumed; preserve disabled")
 
     def debug_log(self, message):
-        if not self.debug_scroll:
+        if not self.debug_scroll and not os.environ.get("DEBUG_ENABLE") == "1":
             return
         line = "[HomeScroll] %s\n" % message
-        print(line, end="", flush=True)
-        with open("/tmp/hon-scroll.log", "a", encoding="utf-8") as log_file:
-            log_file.write(line)
+        debug_print(line, end="")
+        if self.debug_scroll:
+            with open("/tmp/hon-scroll.log", "a", encoding="utf-8") as log_file:
+                log_file.write(line)
 
     def on_mapped(self, widget, param_spec):
         self.debug_log("mapped=%s saved=%s" % (self.get_mapped(), self.scroll_position))

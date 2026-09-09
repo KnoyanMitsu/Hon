@@ -4,6 +4,7 @@ from gi.repository import Adw, Gtk
 from pages.page import Page
 from pages.reader.readerpage import ReaderPage
 from core.images import load_thumbnail
+from core.debug import debug_print
 import os
 from core.api import LibraryAPI
 
@@ -75,12 +76,12 @@ class BookDetailPage(Page):
         button.set_icon_name("starred-symbolic" if is_fav else "non-starred-symbolic")
 
     def onclick_chapter(self, row, chapter):
-        # print(self.history.get("last_page"))
+        # debug_print(self.history.get("last_page"))
         if self.history and self.history.get("chapter_id") == chapter["id"]:
-            print("last seen")
+            debug_print("last seen")
             reader_page = ReaderPage(chapter, initial_page=self.history.get("last_page"))
         else:
-            print("new chapter")
+            debug_print("new chapter")
             reader_page = ReaderPage(chapter)
 
         nav_page = Adw.NavigationPage(child=reader_page, title=chapter["chapter_title"])

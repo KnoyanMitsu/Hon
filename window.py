@@ -74,6 +74,7 @@ class Window(Adw.ApplicationWindow):
         self.nav_view = Adw.NavigationView()
 
         root_page = Adw.NavigationPage(child=toolbar, title="Hon")
+        root_page.connect("shown", lambda page: self.home_page.refresh())
         root_page.connect("shown", lambda page: self.fav_page.refresh())
         root_page.connect("shown", lambda page: self.history_page.refresh())
         self.nav_view.push(root_page)
@@ -90,7 +91,9 @@ class Window(Adw.ApplicationWindow):
         self.home_page.refresh_button.set_visible(child is self.home_page)
         self.fav_page.refresh_button.set_visible(child is self.fav_page)
 
-        if child is self.fav_page:
+        if child is self.home_page:
+            self.home_page.reload()
+        elif child is self.fav_page:
             self.fav_page.reload_favorites()
         elif child is self.history_page:
             self.history_page.load_history()

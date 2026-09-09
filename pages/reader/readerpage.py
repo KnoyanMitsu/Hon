@@ -8,6 +8,7 @@ from gi.repository import Adw, Gtk, GLib, Gdk
 from pages.page import Page
 from pages.reader.reader_ocr import ReaderPageOCRMixin
 from core.api import LibraryAPI
+from core.debug import debug_print
 from core.images import thumbnail_path
 from core.manga_ocr import is_available
 from core.deepl import is_available as deepl_available
@@ -39,16 +40,16 @@ class ReaderPage(Page, ReaderPageOCRMixin):
             if book_id:
                 history = self.reader_api.get_book_history(book_id)
                 if history and history.get("chapter_id") == chapter["id"]:
-                    print("last seen")
+                    debug_print("last seen")
                     initial_page = history.get("last_page")
                 else:
-                    print("new chapter")
+                    debug_print("new chapter")
                     initial_page = 1
             else:
-                print("new chapter but error")
+                debug_print("new chapter but error")
                 initial_page = 1
 
-        print(initial_page)
+        debug_print(initial_page)
         self.current_page = max(0, min(initial_page - 1, len(self.page_data) - 1)) if self.page_data else 0
         self.favorite_pages = set(self.reader_api.get_favorite_pages(chapter["id"]))
         self.page_containers = []
@@ -355,16 +356,17 @@ class ReaderPage(Page, ReaderPageOCRMixin):
     def page_load_failed(self, page_number, error):
         self.loading_pages.discard(page_number)
         self.debug_log("load failed page=%s error=%s" % (page_number + 1, error))
-        print(
+        debug_print(
             f"Gagal memuat halaman {page_number + 1} "
             f"chapter {self.chapter.get('id')}: {error}"
         )
         return False
 
     def debug_log(self, message):
-        if not self.debug_reader:
+        if not self.debug_reader and not os.environ.get("DEBUG_ENABLE") == "1":
             return
         line = "[Reader] %s\n" % message
-        print(line, end="", flush=True)
-        with open("/tmp/hon-reader.log", "a", encoding="utf-8") as log_file:
-            log_file.write(line)
+        debug_print(line, end="")
+        if self.debug_reader:
+            with open("/tmp/hon-reader.log", "a", encoding="utf-8") as log_file:
+                log_file.write(line)

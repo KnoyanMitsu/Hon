@@ -4,6 +4,7 @@ from gi.repository import Adw, Gtk
 from pages.page import Page
 import os
 from core.api import LibraryAPI
+from core.debug import debug_print
 from core.paths import get_db_path
 from core.settings import get_setting, set_setting
 class PathFolderPage(Page):
@@ -80,7 +81,7 @@ class PathFolderPage(Page):
         target_language = self.deepl_language_row.get_text().strip().upper() or "VI"
         set_setting("deepl_api_key", api_key)
         set_setting("deepl_target_lang", target_language)
-        print("DeepL settings saved")
+        debug_print("DeepL settings saved")
 
     def pathGroup(self, title, subtitle):
         row = Adw.ActionRow(title=title)
@@ -107,17 +108,24 @@ class PathFolderPage(Page):
         alert.add_response("cancel", "Cancel")
         alert.add_response("delete", "Delete")
         alert.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
-        alert.choose(self.get_root(), None, self.on_delete_confirmed, row, path)
+        alert.set_close_response("cancel")
+        alert.set_default_response("cancel")
+        alert.choose(self.get_root(), None, self.on_delete_confirmed, (row, path))
 
-        
-    def on_delete_confirmed(self, alert, response, row, path):
+    def on_delete_confirmed(self, alert, result, user_data):
+        row, path = user_data
+        try:
+            response = alert.choose_finish(result)
+        except Exception as e:
+            debug_print("Gagal konfirmasi dialog:", e)
+            return
         if response == "delete":
             try:
                 self.api.remove_folder_by_path(path)    # Hapus dari DB
-                self.group.remove(row)    
-                print("Deleted path:", path)
+                self.group.remove(row)
+                debug_print("Deleted path:", path)
             except Exception as e:
-                print("Gagal delete path:", e)
+                debug_print("Gagal delete path:", e)
 
     def on_folder_selected(self, dialog, result):
         try:
@@ -130,9 +138,9 @@ class PathFolderPage(Page):
             if result["added"]:
                 self.pathGroup(os.path.basename(path), path)
             else:
-                print("Folder sudah terdaftar:", path)
+                debug_print("Folder sudah terdaftar:", path)
         except Exception as e:
-            print("Gagal pilih folder:", e)
+            debug_print("Gagal pilih folder:", e)
 
 
     def on_about_activated(self, row):
@@ -163,5 +171,5 @@ class PathFolderPage(Page):
 
     def on_scan_clicked(self, button):
         result = self.api.scan_all()   # <-- ini yang trigger scan semua path
-        print("Hasil scan:", result)
+        debug_print("Hasil scan:", result)
         # TODO: nanti bisa diganti toast/notifikasi biar user liat progressnya

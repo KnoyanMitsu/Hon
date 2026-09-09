@@ -7,6 +7,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk, GLib
 from pages.page import Page
 from core.api import LibraryAPI
+from core.debug import debug_print
 from pages.bookdetail import BookDetailPage
 from core.images import load_thumbnail
 
@@ -149,9 +150,9 @@ class FavoritePage(Page):
             self.preserve_scroll_position = False
 
     def debug_log(self, message):
-        if not self.debug_scroll:
+        if not self.debug_scroll and not os.environ.get("DEBUG_ENABLE") == "1":
             return
-        print(f"[FavoriteScroll] {message}", flush=True)
+        debug_print(f"[FavoriteScroll] {message}")
 
     def on_mapped(self, widget, param_spec):
         if self.get_mapped():

@@ -1,6 +1,7 @@
 import threading
 from PIL import Image
 from gi.repository import Gio, Gtk, GLib
+from core.debug import debug_print
 
 
 class ReaderPageOCRMixin:
@@ -136,11 +137,11 @@ class ReaderPageOCRMixin:
     def on_selection_ocr_finished(self, error):
         self.set_ocr_running(False)
         if error:
-            print(f"Manga OCR selection gagal: {error}")
+            debug_print(f"Manga OCR selection gagal: {error}")
         else:
             self.ocr_document = self.reader_api.get_ocr_document(self.chapter["id"])
             self.render_ocr_overlays()
-            print("Manga OCR selection selesai")
+            debug_print("Manga OCR selection selesai")
         return False
 
     def update_ocr_action(self):
@@ -174,7 +175,7 @@ class ReaderPageOCRMixin:
     def on_clear_ocr_finished(self, error):
         self.set_ocr_running(False)
         if error:
-            print(f"Clear OCR gagal: {error}")
+            debug_print(f"Clear OCR gagal: {error}")
         else:
             self.ocr_document = None
             self.render_ocr_overlays()
@@ -184,7 +185,7 @@ class ReaderPageOCRMixin:
                     text_layer.remove(label)
                 labels.clear()
 
-            print("OCR berhasil dihapus")
+            debug_print("OCR berhasil dihapus")
         return False
 
     def on_translate_ocr(self, action, parameter):
@@ -205,9 +206,9 @@ class ReaderPageOCRMixin:
     def on_translate_finished(self, translated_count, error):
         self.set_ocr_running(False)
         if error:
-            print(f"DeepL translation gagal: {error}")
+            debug_print(f"DeepL translation gagal: {error}")
         else:
-            print(f"DeepL translation selesai: {translated_count} block")
+            debug_print(f"DeepL translation selesai: {translated_count} block")
             self.ocr_document = self.reader_api.get_ocr_document(self.chapter["id"])
             self.render_ocr_overlays()
         return False
@@ -228,9 +229,9 @@ class ReaderPageOCRMixin:
                 Gio.FileCreateFlags.REPLACE_DESTINATION,
                 None,
             )
-            print("OCR berhasil di-export")
+            debug_print("OCR berhasil di-export")
         except Exception as error:
-            print(f"Gagal export OCR: {error}")
+            debug_print(f"Gagal export OCR: {error}")
 
     def on_import_ocr(self, action, parameter):
         dialog = Gtk.FileDialog()
@@ -246,9 +247,9 @@ class ReaderPageOCRMixin:
                 self.chapter["id"],
                 contents.decode("utf-8"),
             )
-            print("OCR berhasil di-import")
+            debug_print("OCR berhasil di-import")
         except Exception as error:
-            print(f"Gagal import OCR: {error}")
+            debug_print(f"Gagal import OCR: {error}")
 
     def on_run_manga_ocr_all(self, action, parameter):
         self.debug_log("manual manga OCR all pages requested")
@@ -272,9 +273,9 @@ class ReaderPageOCRMixin:
     def on_manga_ocr_all_finished(self, page_count, error):
         self.set_ocr_running(False)
         if error:
-            print(f"Manga OCR semua halaman gagal: {error}")
+            debug_print(f"Manga OCR semua halaman gagal: {error}")
         else:
-            print(f"Manga OCR selesai untuk {page_count} halaman")
+            debug_print(f"Manga OCR selesai untuk {page_count} halaman")
         return False
 
     def on_run_manga_ocr(self, action, parameter):
@@ -297,9 +298,9 @@ class ReaderPageOCRMixin:
     def on_manga_ocr_finished(self, page_number, text, error):
         self.set_ocr_running(False)
         if error:
-            print(f"Manga OCR gagal halaman {page_number}: {error}")
+            debug_print(f"Manga OCR gagal halaman {page_number}: {error}")
         else:
-            print(f"Manga OCR selesai halaman {page_number}: {text}")
+            debug_print(f"Manga OCR selesai halaman {page_number}: {text}")
             self.ocr_document = self.reader_api.get_ocr_document(self.chapter["id"])
             self.render_ocr_overlays()
         return False
