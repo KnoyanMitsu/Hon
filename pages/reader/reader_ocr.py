@@ -21,6 +21,7 @@ class ReaderPageOCRMixin:
         all_ocr_action = Gio.SimpleAction.new("run-manga-ocr-all", None)
         translate_action = Gio.SimpleAction.new("translate-ocr", None)
         export_action = Gio.SimpleAction.new("export-ocr", None)
+        export_pages_action = Gio.SimpleAction.new("export-pages-zip", None)
         import_action = Gio.SimpleAction.new("import-ocr", None)
         select_action = Gio.SimpleAction.new("select-ocr-area", None)
         clear_ocr_action = Gio.SimpleAction.new("clear-ocr", None)
@@ -28,6 +29,7 @@ class ReaderPageOCRMixin:
         all_ocr_action.connect("activate", self.on_run_manga_ocr_all)
         translate_action.connect("activate", self.on_translate_ocr)
         export_action.connect("activate", self.on_export_ocr)
+        export_pages_action.connect("activate", self.on_export_pages_zip)
         import_action.connect("activate", self.on_import_ocr)
         select_action.connect("activate", self.on_select_ocr_area)
         clear_ocr_action.connect("activate", self.on_clear_ocr)
@@ -37,12 +39,14 @@ class ReaderPageOCRMixin:
         actions.add_action(all_ocr_action)
         actions.add_action(translate_action)
         actions.add_action(export_action)
+        actions.add_action(export_pages_action)
         actions.add_action(import_action)
         actions.add_action(select_action)
         actions.add_action(clear_ocr_action)
         self.ocr_action = ocr_action
         self.all_ocr_action = all_ocr_action
         self.translate_action = translate_action
+        self.export_pages_action = export_pages_action
         header.insert_action_group("reader", actions)
 
         menu = Gio.Menu()
@@ -51,6 +55,7 @@ class ReaderPageOCRMixin:
         menu.append("Run Manga OCR (all pages)", "reader.run-manga-ocr-all")
         menu.append("Translate OCR", "reader.translate-ocr")
         menu.append("Export OCR JSON", "reader.export-ocr")
+        menu.append("Export All Page with OCR to JPG (Zip)", "reader.export-pages-zip")
         menu.append("Import OCR JSON", "reader.import-ocr")
         menu.append("Select OCR Area", "reader.select-ocr-area")
         menu.append("Clear OCR", "reader.clear-ocr")
@@ -233,14 +238,57 @@ class ReaderPageOCRMixin:
         except Exception as error:
             debug_print(f"Gagal export OCR: {error}")
 
+    def on_export_pages_zip(self, action, parameter):
+        dialog = Gtk.FileDialog()
+        dialog.set_initial_name(f"chapter-{self.chapter['id']}-translated.zip")
+        dialog.save(self.get_root(), None, self.on_export_pages_zip_chosen)
+
+    def on_export_pages_zip_chosen(self, dialog, result):
+        try:
+            target = dialog.save_finish(result)
+        except Exception as error:
+            debug_print(f"Export halaman dibatalkan: {error}")
+            return
+        if target is None:
+            return
+        output_path = target.get_path()
+        if output_path and not output_path.lower().endswith(".zip"):
+            output_path += ".zip"
+        self.set_ocr_running(True)
+        threading.Thread(
+            target=self.export_pages_zip_in_background,
+            args=(output_path,),
+            daemon=True,
+        ).start()
+
+    def export_pages_zip_in_background(self, output_path):
+        try:
+            zip_bytes = self.reader_api.export_translated_pages_zip(self.chapter["id"])
+            with open(output_path, "wb") as output_file:
+                output_file.write(zip_bytes)
+            GLib.idle_add(self.on_export_pages_zip_finished, None)
+        except Exception as error:
+            GLib.idle_add(self.on_export_pages_zip_finished, str(error))
+
+    def on_export_pages_zip_finished(self, error):
+        self.set_ocr_running(False)
+        if error:
+            debug_print(f"Gagal export halaman + OCR: {error}")
+        else:
+            debug_print("Export all page with OCR to JPG (Zip) selesai")
+        return False
+
     def on_import_ocr(self, action, parameter):
+        print("import OCR triggered")
         dialog = Gtk.FileDialog()
         dialog.open_text_file(self.get_root(), None, self.on_import_finished)
 
     def on_import_finished(self, dialog, result):
+        print("import OCR finished")
         try:
             file, encoding = dialog.open_text_file_finish(result)
             success, contents, _ = file.load_contents()
+            print("file OCR berhasil dibaca")
             if not success:
                 raise RuntimeError("file OCR tidak bisa dibaca")
             self.reader_api.import_ocr(
@@ -314,6 +362,8 @@ class ReaderPageOCRMixin:
             self.all_ocr_action.set_enabled(not running and self.manga_ocr_available)
         if self.translate_action:
             self.translate_action.set_enabled(not running and self.deepl_available)
+        if getattr(self, "export_pages_action", None):
+            self.export_pages_action.set_enabled(not running)
 
     def render_ocr_overlays(self):
         if not self.ocr_document:
@@ -328,17 +378,11 @@ class ReaderPageOCRMixin:
             blocks = page.get("blocks", [])
             self.debug_log(f"page={page_index+1} jumlah blocks={len(blocks)}")
             for block in blocks:
-                text = block.get("original", "").strip()
-                self.debug_log(f"  block text='{text}'")
-                if not text:
-                    continue
-                label = Gtk.Label()
-            for block in page.get("blocks", []):
-                text = (
-                    block.get("original", "")
-                    if self.show_original_overlay
-                    else block.get("translated", "")
-                ).strip()
+                # Tampilkan teks original jika: show_original aktif, atau translated kosong
+                translated = block.get("translated", "").strip()
+                original = block.get("original", "").strip()
+                text = original if (self.show_original_overlay or not translated) else translated
+                self.debug_log(f"  block original='{original}' translated='{translated}' shown='{text}'")
                 if not text:
                     continue
                 label = Gtk.Label()
@@ -377,11 +421,9 @@ class ReaderPageOCRMixin:
         offset_y = (container.get_height() - source_height * scale) / 2
         label_index = 0
         for block in page.get("blocks", []):
-            text = (
-                block.get("original", "")
-                if self.show_original_overlay
-                else block.get("translated", "")
-            ).strip()
+            translated = block.get("translated", "").strip()
+            original = block.get("original", "").strip()
+            text = original if (self.show_original_overlay or not translated) else translated
             if not text:
                 continue
             if label_index >= len(labels):

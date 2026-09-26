@@ -1,9 +1,12 @@
+import io
 import json
+import zipfile
 from .scanner import scan_library
 from .database import LibraryDB
 from .connection import Connection
 from .reader import list_pages, read_page, read_pages
 from .ocr import decode, encode, empty_document
+from .exporter import render_page_with_ocr
 from .manga_ocr import recognize, recognize_all, recognize_crop
 from .deepl import is_available as deepl_available, translate_document
 
@@ -243,6 +246,43 @@ class LibraryAPI:
 
         self.db.save_ocr_document(chapter_id, encode(document))
         return {"document": document, "translated": translated_count}
+
+    def export_translated_pages_zip(self, chapter_id: int, progress_callback=None):
+        """Render semua halaman dengan teks translated (fallback original) jadi JPG lalu ZIP.
+
+        Return bytes ZIP. progress_callback(page_number, total) dipanggil tiap halaman selesai.
+        """
+        chapter = self.db.get_chapter(chapter_id)
+        if chapter is None:
+            raise ValueError("Chapter tidak ditemukan")
+        stored = self.db.get_ocr_document(chapter_id)
+        if not stored:
+            raise ValueError("Belum ada hasil OCR untuk chapter ini")
+        document = decode(stored)
+        pages = document.get("pages", [])
+        if not pages:
+            raise ValueError("Dokumen OCR kosong")
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            total = len(pages)
+            for index, page in enumerate(pages, start=1):
+                page_number = page.get("page", index)
+                info = self.get_chapter_page(chapter_id, page_number)
+                if info is None:
+                    raise ValueError(f"Halaman tidak ditemukan: {page_number}")
+                image = render_page_with_ocr(
+                    info["image_path"],
+                    page.get("blocks", []),
+                    prefer_translated=True,
+                )
+                image_buffer = io.BytesIO()
+                image.save(image_buffer, format="JPEG", quality=92)
+                archive.writestr(f"page-{page_number:03d}.jpg", image_buffer.getvalue())
+                if progress_callback is not None:
+                    progress_callback(page_number, total)
+        buffer.seek(0)
+        return buffer.getvalue()
 
     def clear_ocr_page(self, chapter_id: int, page_number: int):
         stored = self.db.get_ocr_document(chapter_id)

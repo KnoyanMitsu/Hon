@@ -3,7 +3,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk, GLib
+from gi.repository import Adw, Gtk, GLib, Gio, GObject
 from pages.page import Page
 from core.api import LibraryAPI
 from pages.bookdetail import BookDetailPage
@@ -12,6 +12,13 @@ from core.paths import get_db_path
 from core.debug import debug_print
 from core.images import load_thumbnail
 import threading
+
+class BookItem(GObject.Object):
+    __gtype_name__ = "BookItem"
+    def __init__(self, book):
+        super().__init__()
+        self.book = book
+
 class HomePage(Page):
     def __init__(self, **kwargs):
         super().__init__("Home", **kwargs)
@@ -28,7 +35,13 @@ class HomePage(Page):
         self.refresh_button = Gtk.Button(icon_name="view-refresh-symbolic")
         self.refresh_button.set_tooltip_text("Refresh library")
         self.refresh_button.connect("clicked", self.on_refresh_clicked)
-
+        self._visible_items = 0
+        self._fps_frame_count = 0
+        self._fps_last_check = None
+        self._setup_count = 0
+        self._bind_count = 0
+        self._unbind_count = 0
+        self._bound_positions = set()
         # load di background
         thread = threading.Thread(target=self.load_library_in_background)
         thread.daemon = True
@@ -66,34 +79,34 @@ class HomePage(Page):
         return False
 
     
+
     def build_grid(self, books):
-        self.flowbox = Gtk.FlowBox()
-        self.flowbox.set_valign(Gtk.Align.START)
-        self.flowbox.set_max_children_per_line(4)
-        self.flowbox.set_min_children_per_line(2)
-        self.flowbox.set_selection_mode(Gtk.SelectionMode.NONE)
-        self.flowbox.set_column_spacing(16)
-        self.flowbox.set_row_spacing(16)
-        self.flowbox.set_margin_top(24)
-        self.flowbox.set_margin_bottom(24)
+        self._books = books
+        self.store = Gio.ListStore.new(BookItem)
+        for b in books:
+            self.store.append(BookItem(b))
 
-        for book in books:
-            card = self.create_book_card(
-                title=book["title"],
-                subtitle=f"{book['total_chapters']} chapters",
-                image=book["cover_path"],
-                book=book
-            )
-            self.flowbox.append(card)
+        selection = Gtk.SingleSelection.new(self.store)
+        selection.set_autoselect(False)
+        selection.set_can_unselect(True)
+        self.selection = selection
 
-        # 1. Bungkus flowbox pakai Clamp (flowbox belum punya parent -> aman)
-        clamp = Adw.Clamp()
+        factory = Gtk.SignalListItemFactory()
+        factory.connect("setup", self._on_factory_setup)
+        factory.connect("bind", self._on_factory_bind)
+        factory.connect("unbind", self._on_factory_unbind)
+
+        self.gridview = Gtk.GridView.new(selection, factory)
+        self.gridview.set_single_click_activate(True)
+        self.gridview.connect("activate", self._on_grid_activate)
+        self.gridview.set_max_columns(4)
+        self.gridview.set_min_columns(2)
+        self.gridview.set_valign(Gtk.Align.START)
+
+        clamp = Adw.ClampScrollable()
         clamp.set_maximum_size(1200)
-        clamp.set_margin_start(24)
-        clamp.set_margin_end(24)
-        clamp.set_child(self.flowbox)
+        clamp.set_child(self.gridview)
 
-        # 2. Clamp masuk ke ScrolledWindow
         self.scrolled = Gtk.ScrolledWindow()
         self.scrolled.set_vexpand(True)
         self.scrolled.set_child(clamp)
@@ -115,19 +128,113 @@ class HomePage(Page):
         bin = Adw.BreakpointBin()
         bin.set_size_request(300, 200)
         bin.set_child(self.scrolled)
-
-        bp_mobile = Adw.Breakpoint.new(
-            Adw.BreakpointCondition.parse("max-width: 400px")
-        )
-        bp_mobile.add_setter(self.flowbox, "max-children-per-line", 2)
-        bp_mobile.add_setter(clamp, "margin-start", 12)
-        bp_mobile.add_setter(clamp, "margin-end", 12)
-        bp_mobile.add_setter(self.flowbox, "column-spacing", 8)
-        bp_mobile.add_setter(self.flowbox, "row-spacing", 8)
+        bp_mobile = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 400px"))
+        bp_mobile.add_setter(self.gridview, "max-columns", 2)
+        bp_mobile.add_setter(self.gridview, "min-columns", 2)
+        bp_mobile.add_setter(self.gridview, "margin-start", 12)
+        bp_mobile.add_setter(self.gridview, "margin-end", 12)
         bin.add_breakpoint(bp_mobile)
 
         self.set_content(bin)
         GLib.idle_add(self.restore_scroll_position)
+        #self._start_perf_tracker() 
+
+
+    
+    def _start_perf_tracker(self):
+        if os.environ.get("DEBUG_ENABLE") != "1":
+            return
+        self.add_tick_callback(self._on_tick)
+        GLib.timeout_add(1000, self._log_perf)
+
+    def _on_tick(self, widget, frame_clock):
+        self._fps_frame_count += 1
+        return True   # True = terus jalan tiap frame, False = berhenti
+
+
+
+    def _on_factory_setup(self, factory, list_item):
+        self._setup_count += 1
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box.set_size_request(120, 320)
+        box.set_valign(Gtk.Align.START)
+        box.set_margin_top(8)      # <-- tambahin ini
+        box.set_margin_bottom(8)   # <-- dan ini
+        box.set_margin_start(8)    # <-- dan ini
+        box.set_margin_end(8)      # <-- dan ini
+        thumb_box = Gtk.Box()
+        thumb_box.set_size_request(120, 180)
+        thumb_box.set_valign(Gtk.Align.START)
+        thumb_box.set_overflow(Gtk.Overflow.HIDDEN)   # jaga-jaga, sesuai fix kemarin
+        box.append(thumb_box)
+
+        title_label = Gtk.Label(wrap=True, lines=2, ellipsize=True, xalign=0)
+        title_label.add_css_class("caption-heading")
+        box.append(title_label)
+
+        subtitle_label = Gtk.Label(xalign=0)
+        subtitle_label.add_css_class("caption")
+        subtitle_label.add_css_class("dim-label")
+        box.append(subtitle_label)
+
+        list_item.set_child(box)
+        list_item._thumb_box = thumb_box
+        list_item._title = title_label
+        list_item._subtitle = subtitle_label
+
+    def _on_factory_bind(self, factory, list_item):
+        position = list_item.get_position()
+        self._bound_positions.add(position)
+        self._bind_count += 1
+        item = list_item.get_item()
+        if not item:
+            return
+        book = item.book
+        list_item._title.set_label(book["title"])
+        list_item._subtitle.set_label(f"{book['total_chapters']} chapters")
+
+        thumb_box = list_item._thumb_box
+        if book.get("cover_path") and os.path.exists(book["cover_path"]):
+            cover = load_thumbnail(book["cover_path"], 240, 700)
+            cover.set_content_fit(Gtk.ContentFit.COVER)
+            cover.set_size_request(120, 180)   # eksplisit di widget-nya sendiri, bukan cuma wrapper
+        else:
+            icon = Gtk.Image.new_from_icon_name("image-x-generic-symbolic")
+            icon.set_pixel_size(48)
+            icon.set_halign(Gtk.Align.CENTER)   # <-- tambahin ini
+            icon.set_valign(Gtk.Align.CENTER)   # <-- pastiin ini juga ada
+            cover = icon
+
+        thumb_box.append(cover)
+        list_item._cover = cover   # simpen referensi buat dibersihin di unbind
+
+
+    def _on_factory_unbind(self, factory, list_item):
+        position = list_item.get_position()
+        self._bound_positions.discard(position)
+        self._unbind_count += 1
+        if hasattr(list_item, "_cover") and list_item._cover:
+            list_item._thumb_box.remove(list_item._cover)
+            list_item._cover = None
+
+    def _log_perf(self):
+        total = len(getattr(self, "_books", []))
+        window_height = self.get_root().get_height() if self.get_root() else 0
+        positions = sorted(self._bound_positions)
+        pos_summary = f"min={positions[0]} max={positions[-1]}" if positions else "kosong"
+        debug_print(
+            f"[Perf:Home] fps={self._fps_frame_count} "
+            f"bind={self._bind_count} unbind={self._unbind_count} "
+            f"currently_bound={len(self._bound_positions)} {pos_summary} "
+            f"total={total} window_h={window_height}\n"
+        )
+        self._fps_frame_count = 0
+        return True
+
+    def _on_grid_activate(self, gridview, position):
+        item = self.store.get_item(position)
+        if item:
+            self.on_click_book(item.book)
 
     def on_refresh_clicked(self, button):
         self.refresh_button.set_sensitive(False)

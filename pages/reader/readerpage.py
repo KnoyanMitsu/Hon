@@ -57,6 +57,7 @@ class ReaderPage(Page, ReaderPageOCRMixin):
         self.ocr_action = None
         self.all_ocr_action = None
         self.translate_action = None
+        self.export_pages_action = None
         self.manga_ocr_available = is_available()
         self.deepl_available = deepl_available()
         self.updating_indicator = False
@@ -200,6 +201,10 @@ class ReaderPage(Page, ReaderPageOCRMixin):
         GLib.idle_add(self.render_ocr_overlays)
         GLib.idle_add(self.update_ocr_action)
 
+        key_controller = Gtk.EventControllerKey()
+        key_controller.connect("key-pressed", self.on_key_pressed)
+        self.add_controller(key_controller)
+
 
     def on_page_changed(self, carousel, param_spec):
         page_number = round(carousel.get_position())
@@ -213,6 +218,19 @@ class ReaderPage(Page, ReaderPageOCRMixin):
         self.load_nearby_pages(page_number)
         self.update_indicator(page_number)
         self.update_favorite_button()
+
+    def on_key_pressed(self, controller, keyval, keycode, state):
+        from gi.repository import Gdk
+        if keyval in (Gdk.KEY_Right, Gdk.KEY_Page_Down, Gdk.KEY_n):
+            target = self.current_page + 1
+        elif keyval in (Gdk.KEY_Left, Gdk.KEY_Page_Up, Gdk.KEY_p):
+            target = self.current_page - 1
+        else:
+            return False
+        if 0 <= target < len(self.page_data):
+            page = self.carousel.get_nth_page(target)
+            self.carousel.scroll_to(page, True)
+        return True
 
     def page_text(self, page_number):
         total = len(self.page_data)
